@@ -122,6 +122,7 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
     int t;
     unsigned int md_len;
     unsigned char md[EVP_MAX_MD_SIZE];
+    const char *method_str = NULL;
     aws_conf = ngx_http_get_module_loc_conf(r, ngx_http_aws_auth_module);
     
 
@@ -135,6 +136,28 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
     u_char *uri_end = (u_char*) ngx_escape_uri(uri,r->uri.data, r->uri.len, NGX_ESCAPE_URI);
     *uri_end = '\0'; // null terminate
 
+    /*
+     * Sign the correct method name.
+     */
+    switch (r->method)
+    {
+        case NGX_HTTP_UNKNOWN: method_str = "GET"; break;
+        case NGX_HTTP_GET: method_str = "GET"; break;
+        case NGX_HTTP_HEAD: method_str = "HEAD"; break;
+        case NGX_HTTP_POST: method_str = "POST"; break;
+        case NGX_HTTP_PUT: method_str = "PUT"; break;
+        case NGX_HTTP_DELETE: method_str = "DELETE"; break;
+        case NGX_HTTP_MKCOL: method_str = "MKCOL"; break;
+        case NGX_HTTP_COPY: method_str = "COPY"; break;
+        case NGX_HTTP_MOVE: method_str = "MOVE"; break;
+        case NGX_HTTP_OPTIONS: method_str = "OPTIONS"; break;
+        case NGX_HTTP_PROPFIND: method_str = "PROPFIND"; break;
+        case NGX_HTTP_PROPPATCH: method_str = "PROPPATCH"; break;
+        case NGX_HTTP_LOCK: method_str = "LOCK"; break;
+        case NGX_HTTP_UNLOCK: method_str = "UNLOCK"; break;
+        case NGX_HTTP_TRACE: method_str = "TRACE"; break;
+    }
+
     if(ngx_strcmp(aws_conf->chop_prefix.data, "")) {
 	if(!ngx_strncmp(r->uri.data, aws_conf->chop_prefix.data, aws_conf->chop_prefix.len)) {
 	  uri += aws_conf->chop_prefix.len;
@@ -147,8 +170,8 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
     }
 
     u_char *str_to_sign = ngx_palloc(r->pool,r->uri.len + aws_conf->s3_bucket.len + 200);
-    ngx_sprintf(str_to_sign, "GET\n\n\n\nx-amz-date:%V\n/%V%s%Z",
-        &ngx_cached_http_time, &aws_conf->s3_bucket,uri);
+    ngx_sprintf(str_to_sign, "%s\n\n\n\nx-amz-date:%V\n/%V%s%Z",
+                method_str, &ngx_cached_http_time, &aws_conf->s3_bucket,uri);
     ngx_log_error(NGX_LOG_DEBUG, r->connection->log, 0,"String to sign:%s",str_to_sign);
 
 
