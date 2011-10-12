@@ -141,7 +141,6 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
      */
     switch (r->method)
     {
-        case NGX_HTTP_UNKNOWN: method_str = "GET"; break;
         case NGX_HTTP_GET: method_str = "GET"; break;
         case NGX_HTTP_HEAD: method_str = "HEAD"; break;
         case NGX_HTTP_POST: method_str = "POST"; break;
@@ -156,6 +155,7 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
         case NGX_HTTP_LOCK: method_str = "LOCK"; break;
         case NGX_HTTP_UNLOCK: method_str = "UNLOCK"; break;
         case NGX_HTTP_TRACE: method_str = "TRACE"; break;
+        default: method_str = "PUKE"; break;
     }
 
     if(ngx_strcmp(aws_conf->chop_prefix.data, "")) {
