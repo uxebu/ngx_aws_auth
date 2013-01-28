@@ -45,7 +45,7 @@ static ngx_command_t  ngx_http_aws_auth_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_aws_auth_conf_t, s3_bucket),
       NULL },
-    
+
    { ngx_string("chop_prefix"),
       NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_conf_set_str_slot,
@@ -96,7 +96,7 @@ ngx_http_aws_auth_create_loc_conf(ngx_conf_t *cf)
         return NGX_CONF_ERROR;
     }
 
-    return conf;    
+    return conf;
 }
 
 static char *
@@ -124,12 +124,12 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
     unsigned char md[EVP_MAX_MD_SIZE];
     const char *method_str = NULL;
     aws_conf = ngx_http_get_module_loc_conf(r, ngx_http_aws_auth_module);
-    
 
-    /* 
+
+    /*
      *   This Block of code added to deal with paths that are not on the root -
-     *   that is, via proxy_pass that are being redirected and the base part of 
-     *   the proxy url needs to be taken off the beginning of the URI in order 
+     *   that is, via proxy_pass that are being redirected and the base part of
+     *   the proxy url needs to be taken off the beginning of the URI in order
      *   to sign it correctly.
     */
     u_char *uri = ngx_palloc(r->pool, r->uri.len + 200); // allow room for escaping
@@ -141,6 +141,7 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
      */
     switch (r->method)
     {
+        case NGX_HTTP_UNKNOWN: method_str = "GET"; break;
         case NGX_HTTP_GET: method_str = "GET"; break;
         case NGX_HTTP_HEAD: method_str = "HEAD"; break;
         case NGX_HTTP_POST: method_str = "POST"; break;
@@ -155,26 +156,35 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
         case NGX_HTTP_LOCK: method_str = "LOCK"; break;
         case NGX_HTTP_UNLOCK: method_str = "UNLOCK"; break;
         case NGX_HTTP_TRACE: method_str = "TRACE"; break;
-        default: method_str = "PUKE"; break;
     }
 
     if(ngx_strcmp(aws_conf->chop_prefix.data, "")) {
-	if(!ngx_strncmp(r->uri.data, aws_conf->chop_prefix.data, aws_conf->chop_prefix.len)) {
-	  uri += aws_conf->chop_prefix.len;
-          ngx_log_error(NGX_LOG_DEBUG, r->connection->log, 0,
-            "chop_prefix '%V' chopped from URI",&aws_conf->chop_prefix);
+        if(!ngx_strncmp(r->uri.data, aws_conf->chop_prefix.data, aws_conf->chop_prefix.len)) {
+            uri += aws_conf->chop_prefix.len;
+            ngx_log_error(NGX_LOG_DEBUG, r->connection->log, 0,
+                "chop_prefix '%V' chopped from URI",&aws_conf->chop_prefix);
         } else {
-          ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-            "chop_prefix '%V' NOT in URI",&aws_conf->chop_prefix);
+            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                "chop_prefix '%V' NOT in URI",&aws_conf->chop_prefix);
         }
     }
 
     u_char *str_to_sign = ngx_palloc(r->pool,r->uri.len + aws_conf->s3_bucket.len + 200);
-    ngx_sprintf(str_to_sign, "%s\n\n\n\nx-amz-date:%V\n/%V%s%Z",
-                method_str, &ngx_cached_http_time, &aws_conf->s3_bucket,uri);
+
+
+    if (r->headers_in.content_type && r->headers_in.content_type->hash) {
+        u_char *content_type = r->headers_in.content_type->value.data;
+
+        ngx_sprintf(str_to_sign, "%s\n\n%s\n\nx-amz-date:%V\n/%V%s%Z",
+            method_str, content_type, &ngx_cached_http_time, &aws_conf->s3_bucket,uri);
+
+    } else {
+        ngx_sprintf(str_to_sign, "%s\n\n\n\nx-amz-date:%V\n/%V%s%Z",
+            method_str, &ngx_cached_http_time, &aws_conf->s3_bucket,uri);
+    }
+
+
     ngx_log_error(NGX_LOG_DEBUG, r->connection->log, 0,"String to sign:%s",str_to_sign);
-
-
 
     if (evp_md==NULL)
     {
@@ -187,11 +197,11 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
     HMAC(evp_md, aws_conf->secret.data, aws_conf->secret.len, str_to_sign, ngx_strlen(str_to_sign), md, &md_len);
 
     BIO* b64 = BIO_new(BIO_f_base64());
-    BIO* bmem = BIO_new(BIO_s_mem());  
+    BIO* bmem = BIO_new(BIO_s_mem());
     b64 = BIO_push(b64, bmem);
     BIO_write(b64, md, md_len);
     t = BIO_flush(b64); /* read the value esle some gcc, throws error*/
-    BUF_MEM *bptr; 
+    BUF_MEM *bptr;
     BIO_get_mem_ptr(b64, &bptr);
 
     ngx_memcpy(str_to_sign, bptr->data, bptr->length-1);
@@ -248,9 +258,9 @@ register_variable(ngx_conf_t *cf)
         var->data = v->data;
     }
 
-    return NGX_OK;    
+    return NGX_OK;
 }
 
-/* 
+/*
  * vim: ts=4 sw=4 et
  */
