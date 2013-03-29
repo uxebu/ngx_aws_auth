@@ -16,6 +16,52 @@ static void* ngx_http_aws_auth_create_loc_conf(ngx_conf_t *cf);
 static char* ngx_http_aws_auth_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child);
 static ngx_int_t register_variable(ngx_conf_t *cf);
 
+static ngx_table_elt_t *
+search_headers_in(ngx_http_request_t *r, u_char *name, size_t len) {
+    ngx_list_part_t            *part;
+    ngx_table_elt_t            *h;
+    ngx_uint_t                  i;
+
+    /*
+    Get the first part of the list. There is usual only one part.
+    */
+    part = &r->headers_in.headers.part;
+    h = part->elts;
+
+    /*
+    Headers list array may consist of more than one part,
+    so loop through all of it
+    */
+    for (i = 0; /* void */ ; i++) {
+        if (i >= part->nelts) {
+            if (part->next == NULL) {
+                /* The last part, search is done. */
+                break;
+            }
+
+            part = part->next;
+            h = part->elts;
+            i = 0;
+        }
+
+        /*
+        Just compare the lengths and then the names case insensitively.
+        */
+        if (len != h[i].key.len || ngx_strcasecmp(name, h[i].key.data) != 0) {
+            /* This header doesn't match. */
+            continue;
+        }
+
+        // Ta-da, we got one!
+        return &h[i];
+    }
+
+    /*
+    No headers was found
+    */
+    return NULL;
+}
+
 typedef struct {
     ngx_str_t access_key;
     ngx_str_t secret;
@@ -171,16 +217,31 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
 
     u_char *str_to_sign = ngx_palloc(r->pool,r->uri.len + aws_conf->s3_bucket.len + 200);
 
+    // Support for amz-acl header signing
+    u_char *amz_acl_header = ngx_palloc(r->pool, 50);
+    ngx_sprintf(amz_acl_header, "x-amz-acl", amz_acl_header);
+
+    size_t len_acl = ngx_strlen(amz_acl_header);
+    u_char *amz_acl_final = ngx_palloc(r->pool, 400);
+
+    ngx_table_elt_t* header = search_headers_in(r, amz_acl_header, len_acl);
+
+    if (header==NULL) {
+        ngx_sprintf(amz_acl_final, "", header);
+    } else {
+        u_char *amz_header = header->value.data;
+        ngx_sprintf(amz_acl_final, "x-amz-acl:%s\n", amz_header);
+    }
 
     if (r->headers_in.content_type && r->headers_in.content_type->hash) {
         u_char *content_type = r->headers_in.content_type->value.data;
 
-        ngx_sprintf(str_to_sign, "%s\n\n%s\n\nx-amz-date:%V\n/%V%s%Z",
-            method_str, content_type, &ngx_cached_http_time, &aws_conf->s3_bucket,uri);
+        ngx_sprintf(str_to_sign, "%s\n\n%s\n\n%sx-amz-date:%V\n/%V%s%Z",
+            method_str, content_type, amz_acl_final, &ngx_cached_http_time, &aws_conf->s3_bucket,uri);
 
     } else {
-        ngx_sprintf(str_to_sign, "%s\n\n\n\nx-amz-date:%V\n/%V%s%Z",
-            method_str, &ngx_cached_http_time, &aws_conf->s3_bucket,uri);
+        ngx_sprintf(str_to_sign, "%s\n\n\n\n%sx-amz-date:%V\n/%V%s%Z",
+            method_str, amz_acl_final, &ngx_cached_http_time, &aws_conf->s3_bucket,uri);
     }
 
 
