@@ -222,11 +222,12 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
     ngx_sprintf(amz_acl_header, "x-amz-acl");
 
     size_t len_acl = ngx_strlen(amz_acl_header);
-    u_char *amz_acl_final = ngx_palloc(r->pool, 400);
+    u_char *amz_acl_final = ngx_palloc(r->pool, 100);
 
     ngx_table_elt_t* header = search_headers_in(r, amz_acl_header, len_acl);
 
     if (header==NULL) {
+        ngx_log_error(NGX_LOG_INFO, r->connection->log, 0,"GOOOO");
         ngx_sprintf(amz_acl_final, "", header);
     } else {
         u_char *amz_header = header->value.data;
@@ -244,7 +245,7 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
             method_str, amz_acl_final, &ngx_cached_http_time, &aws_conf->s3_bucket,uri);
     }
 
-    ngx_log_error(NGX_LOG_DEBUG, r->connection->log, 0,"String to sign:%s",str_to_sign);
+    ngx_log_error(NGX_LOG_INFO, r->connection->log, 0,"String to sign:%s",str_to_sign);
 
     if (evp_md==NULL)
     {
