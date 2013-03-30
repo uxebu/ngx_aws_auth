@@ -219,7 +219,7 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
 
     // Support for amz-acl header signing
     u_char *amz_acl_header = ngx_palloc(r->pool, 50);
-    ngx_sprintf(amz_acl_header, "x-amz-acl", amz_acl_header);
+    ngx_sprintf(amz_acl_header, "x-amz-acl");
 
     size_t len_acl = ngx_strlen(amz_acl_header);
     u_char *amz_acl_final = ngx_palloc(r->pool, 400);
@@ -243,7 +243,6 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
         ngx_sprintf(str_to_sign, "%s\n\n\n\n%sx-amz-date:%V\n/%V%s%Z",
             method_str, amz_acl_final, &ngx_cached_http_time, &aws_conf->s3_bucket,uri);
     }
-
 
     ngx_log_error(NGX_LOG_DEBUG, r->connection->log, 0,"String to sign:%s",str_to_sign);
 
