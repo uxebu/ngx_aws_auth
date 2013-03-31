@@ -225,7 +225,7 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
     strcpy(amz_acl_final, "");
 
     if (header==NULL) {
-        ngx_sprintf(amz_acl_final, "");
+        sprintf(amz_acl_final, "");
     } else {
         u_char *amz_header = header->value.data;
         sprintf(amz_acl_final, "x-amz-acl:%s\n", amz_header);
