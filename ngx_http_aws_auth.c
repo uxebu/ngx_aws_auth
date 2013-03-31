@@ -218,37 +218,31 @@ ngx_http_aws_auth_variable_s3(ngx_http_request_t *r, ngx_http_variable_value_t *
     u_char *str_to_sign = ngx_palloc(r->pool,r->uri.len + aws_conf->s3_bucket.len + 200);
 
     // Support for amz-acl header signing
-    u_char *amz_acl_header = ngx_palloc(r->pool, 50);
-    ngx_sprintf(amz_acl_header, "x-amz-acl", amz_acl_header);
+    ngx_str_t amz_acl_header = ngx_string("x-amz-acl");
+    ngx_table_elt_t* header = search_headers_in(r, amz_acl_header.data, amz_acl_header.len);
 
-    size_t len_acl = ngx_strlen(amz_acl_header);
-    u_char *amz_acl_final = ngx_palloc(r->pool, 400);
-
-    ngx_table_elt_t* header = search_headers_in(r, amz_acl_header, len_acl);
+    char amz_acl_final[30];
+    strcpy(amz_acl_final, "");
 
     if (header==NULL) {
-        ngx_sprintf(amz_acl_final, "", header);
+        ngx_sprintf(amz_acl_final, "");
     } else {
         u_char *amz_header = header->value.data;
-        ngx_sprintf(amz_acl_final, "x-amz-acl:%s\n", amz_header);
+        sprintf(amz_acl_final, "x-amz-acl:%s\n", amz_header);
     }
 
     if (r->headers_in.content_type && r->headers_in.content_type->hash) {
         u_char *content_type = r->headers_in.content_type->value.data;
-
         ngx_sprintf(str_to_sign, "%s\n\n%s\n\n%sx-amz-date:%V\n/%V%s%Z",
             method_str, content_type, amz_acl_final, &ngx_cached_http_time, &aws_conf->s3_bucket,uri);
-
     } else {
         ngx_sprintf(str_to_sign, "%s\n\n\n\n%sx-amz-date:%V\n/%V%s%Z",
             method_str, amz_acl_final, &ngx_cached_http_time, &aws_conf->s3_bucket,uri);
     }
 
+    ngx_log_error(NGX_LOG_INFO, r->connection->log, 0,"String to sign:%s",str_to_sign);
 
-    ngx_log_error(NGX_LOG_DEBUG, r->connection->log, 0,"String to sign:%s",str_to_sign);
-
-    if (evp_md==NULL)
-    {
+    if (evp_md==NULL) {
        evp_md = EVP_sha1();
     }
 
